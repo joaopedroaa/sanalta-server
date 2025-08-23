@@ -1,20 +1,22 @@
+// server.js
+
 import express from "express";
 import { Server } from "socket.io";
 import { createServer } from "http";
 import cors from "cors";
 import {
-  userJoin,
+  userJoinGroup,
   formatMessage,
   botName,
-  getRoomUsers,
+  getGroupUsers,
   userLeave,
-  getCurrentUser
+  getCurrentUser,
+  saveMessage,
+  getGroupMessages,
 } from "./utils.js";
 
 const app = express();
-
 const server = createServer(app);
-
 const io = new Server(server, {
   cors: {
     origin: "http://localhost:8080",
@@ -24,45 +26,60 @@ const io = new Server(server, {
 });
 
 io.on("connection", (socket) => {
-  console.log('👉 Connected ws', socket.id);
+  socket.on("userJoinGroup", ({ username, group, type }) => {
 
 
-  socket.on("joinRoom", (payload) => {
-    const user = userJoin({ ...payload, id: socket.id });
-    socket.join(user.room);
-    console.log("IN Join Room Event");
+    const user = userJoinGroup({ username, group, id: socket.id, type });
+    socket.join(user.group);
+
+    socket.emit("chatHistory", getGroupMessages(user.group));
+
+    // Notificando de que o usuario entrou
     socket.broadcast
-      .to(user.room)
+      .to(user.group)
       .emit(
         "message",
-        formatMessage(botName, `${user.username} has joined the chat`)
+        formatMessage(botName, `🚀 ${user.username} entrou na sala`)
       );
 
-    io.to(user.room).emit("roomUsers", {
-      room: user.room,
-      users: getRoomUsers(user.room),
+    // Envia historico para o front
+
+    io.to(user.group).emit("groupData", {
+      group: user.group,
+      users: getGroupUsers(user.group),
     });
   });
 
-  socket.on('chatMessage', (msg) => {
+  socket.on("getGroup", () => {
+    socket.emit("groupList", getGroupData());
+  });
 
-    const user = getCurrentUser(socket.id)
-    if(user){
-        io.to(user.room).emit('message', formatMessage(user.username, msg))
+
+
+  socket.on("chatMessage", (msg) => {
+    const user = getCurrentUser(socket.id);
+
+    if (user) {
+      const formattedMessage = {
+        ...formatMessage(user.username, msg),
+        group: user.group,
+      };
+
+      saveMessage(formattedMessage);
+      io.to(user.group).emit("message", formattedMessage);
     }
-
-  })
+  });
 
   socket.on("disconnect", () => {
     const user = userLeave(socket.id);
     if (user) {
-      io.to(user.room).emit(
+      io.to(user.group).emit(
         "message",
         formatMessage(botName, `${user.username} has left the chat`)
       );
-      io.to(user.room).emit("roomUsers", {
-        room: user.room,
-        users: getRoomUsers(user.room),
+      io.to(user.group).emit("groupData", {
+        group: user.group,
+        users: getGroupUsers(user.group),
       });
     }
   });
