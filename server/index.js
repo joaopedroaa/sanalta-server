@@ -7,7 +7,7 @@ import cors from "cors";
 import {
   userJoinGroup,
   formatMessage,
-  botName,
+  systemBotName,
   getGroupUsers,
   userLeave,
   getCurrentUser,
@@ -26,60 +26,65 @@ const io = new Server(server, {
 });
 
 io.on("connection", (socket) => {
-  socket.on("userJoinGroup", ({ username, group, type }) => {
-
-
+  socket.on("group:join", ({ username, group, type }) => {
     const user = userJoinGroup({ username, group, id: socket.id, type });
     socket.join(user.group);
 
-    socket.emit("chatHistory", getGroupMessages(user.group));
-
-    // Notificando de que o usuario entrou
-    const formatedMessage = {
-      ...formatMessage(botName, `${user.username} entrou no grupo`, "join"),
+    const notificationMessage = {
+      ...formatMessage(
+        systemBotName,
+        `${user.username} entrou no grupo`,
+        "join"
+      ),
       group: user.group,
-    }
+    };
 
+    saveMessage(notificationMessage);
+    socket.emit("chat_history_load", getGroupMessages(user.group));
+
+    // Notificando de que o usuario entrou para todos (menos para o prorio usuario)
     socket.broadcast
       .to(user.group)
-      .emit(
-        "message",
-        formatedMessage
-      );
-
-      saveMessage(formatedMessage);
+      .emit("chat:new_notification", notificationMessage);
 
     // Envia historico para o front
-    io.to(user.group).emit("message", formatedMessage);
-    io.to(user.group).emit("groupData", {
+    io.to(user.group).emit("group:users_update", {
       group: user.group,
       users: getGroupUsers(user.group),
     });
   });
 
-
-  socket.on("chatMessage", (msg) => {
+  socket.on("chat:post_message", (msg) => {
     const user = getCurrentUser(socket.id);
 
     if (user) {
-      const formattedMessage = {
+      const userMessage = {
         ...formatMessage(user.username, msg),
         group: user.group,
       };
 
-      saveMessage(formattedMessage);
-      io.to(user.group).emit("message", formattedMessage);
+      saveMessage(userMessage);
+      io.to(user.group).emit("chat:new_message", userMessage);
     }
   });
 
-  socket.on("disconnect", () => {
+  socket.on("group:leave", () => {
+    // Salvando antes para não perder o user.group
     const user = userLeave(socket.id);
+
     if (user) {
-      io.to(user.group).emit(
-        "message",
-        formatMessage(botName, `${user.username} saiu do grupo`, "left")
-      );
-      io.to(user.group).emit("groupData", {
+      const notificationMessage = {
+        ...formatMessage(
+          systemBotName,
+          `${user.username} saiu do grupo`,
+          "left"
+        ),
+        group: user.group,
+      };
+
+      saveMessage(notificationMessage);
+      io.to(user.group).emit("chat:new_notification", notificationMessage);
+      io.to(user.group).emit("group:users_update", {
         group: user.group,
         users: getGroupUsers(user.group),
       });
