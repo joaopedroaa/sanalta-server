@@ -35,25 +35,27 @@ io.on("connection", (socket) => {
     socket.emit("chatHistory", getGroupMessages(user.group));
 
     // Notificando de que o usuario entrou
+    const formatedMessage = {
+      ...formatMessage(botName, `${user.username} entrou no grupo`, "join"),
+      group: user.group,
+    }
+
     socket.broadcast
       .to(user.group)
       .emit(
         "message",
-        formatMessage(botName, `🚀 ${user.username} entrou na sala`)
+        formatedMessage
       );
 
-    // Envia historico para o front
+      saveMessage(formatedMessage);
 
+    // Envia historico para o front
+    io.to(user.group).emit("message", formatedMessage);
     io.to(user.group).emit("groupData", {
       group: user.group,
       users: getGroupUsers(user.group),
     });
   });
-
-  socket.on("getGroup", () => {
-    socket.emit("groupList", getGroupData());
-  });
-
 
 
   socket.on("chatMessage", (msg) => {
@@ -75,7 +77,7 @@ io.on("connection", (socket) => {
     if (user) {
       io.to(user.group).emit(
         "message",
-        formatMessage(botName, `${user.username} has left the chat`)
+        formatMessage(botName, `${user.username} saiu do grupo`, "left")
       );
       io.to(user.group).emit("groupData", {
         group: user.group,
