@@ -5,15 +5,18 @@ import { Server } from "socket.io";
 import { createServer } from "http";
 import cors from "cors";
 import {
-  addUser,
-  removeUser,
+  addUserToGroup,
+  removeUserToGroup,
   createMessage,
-  systemBotName,
   getUserById,
   getUsersInGroup,
   addMessageToGroup,
   getMessagesFromGroup,
-} from "./utils.js";
+} from "./groupServices.js";
+
+import { addUserToRoom } from "./roomServices.js";
+import { systemBotName } from "./utils.js";
+import { log } from "console";
 
 const app = express();
 const server = createServer(app);
@@ -27,7 +30,7 @@ const io = new Server(server, {
 
 io.on("connection", (socket) => {
   socket.on("group:join", ({ username, group, type }) => {
-    const user = addUser({ id: socket.id, username, group, type });
+    const user = addUserToGroup({ id: socket.id, username, group, type });
     socket.join(user.group);
 
     const notificationMessage = createMessage(
@@ -64,7 +67,7 @@ io.on("connection", (socket) => {
 
   socket.on("group:leave", () => {
     // Salvando antes para não perder o user.group
-    const user = removeUser(socket.id);
+    const user = removeUserToGroup(socket.id);
 
     if (user) {
       const notificationMessage = createMessage(
@@ -80,6 +83,29 @@ io.on("connection", (socket) => {
         users: getUsersInGroup(user.group),
       });
     }
+  });
+
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+  //
+
+  socket.on("room:join", ({ username, type }) => {
+    console.log("room:join", { username, type });
+
+    const user = addUserToRoom({ id: socket.id, username, type });
+    socket.join(user.group);
   });
 });
 
